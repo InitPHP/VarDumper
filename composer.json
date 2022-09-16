@@ -6,7 +6,10 @@
     "autoload": {
         "psr-4": {
             "InitPHP\\VarDumper\\": "src/"
-        }
+        },
+        "files": [
+            "src/Init.php"
+        ]
     },
     "authors": [
         {
