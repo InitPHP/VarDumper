@@ -27,8 +27,14 @@ class VarDumper
     /** @var string */
     private $dump;
 
-    /** @var int */
-    private static $level = 1;
+    protected $theme = [
+        'pre'           => 'color: #F1F1F1; background: #222; border: 1px solid #111; padding: 5px; margin: 8px;',
+        'type'          => 'color: #FF4A4A;',
+        'length'        => 'color: #A6E3E9;',
+        'class_name'    => 'color: #A460ED;',
+        'null'          => 'color: #E3FDFD;',
+        'bool'          => 'color: #DAF7A6;',
+    ];
 
     protected const ARRAY = 0;
     protected const METHOD = 1;
@@ -42,7 +48,7 @@ class VarDumper
 
     public function __toString()
     {
-        return \str_replace(PHP_EOL . PHP_EOL, PHP_EOL, $this->dump);
+        return '<pre style="' . $this->theme['pre'] . '">' . \str_replace(PHP_EOL . PHP_EOL, PHP_EOL, $this->dump) . '</pre>';
     }
 
     public static function newInstance($value)
@@ -52,13 +58,13 @@ class VarDumper
 
     public function dump()
     {
-        echo '<pre style="padding: 5px; border: 1px solid #ccc; background: #fafafa;">' . $this->__toString() . '</pre>';
+        echo  $this->__toString();
     }
 
     private function iterableVarDumper($iterable, $type = self::ARRAY)
     {
         $size = \count($iterable);
-        $res = '(' . $size . ') {';
+        $res = '(<span style="' . $this->theme['length'] . '">' . $size . '</span>) {';
         if($size > 0){
             
             ++$this->reccess;
@@ -89,13 +95,13 @@ class VarDumper
         $properties = \get_object_vars($object);
         if(!empty($properties)){
             $res .= PHP_EOL . \str_repeat(' ', (4 * $this->reccess)) 
-                    . '[PROPERTIES] ' . $this->iterableVarDumper($properties, self::PROPERTIES) . PHP_EOL;
+                    . '[<b>PROPERTIES</b>] ' . $this->iterableVarDumper($properties, self::PROPERTIES) . PHP_EOL;
         }
 
         $methods = \get_class_methods($object);
         if(!empty($methods)){
             $res .= PHP_EOL . \str_repeat(' ', (4 * $this->reccess)) 
-                    . '[METHODS] ' . $this->iterableVarDumper($methods, self::METHOD) . PHP_EOL;
+                    . '[<b>METHODS</b>] ' . $this->iterableVarDumper($methods, self::METHOD) . PHP_EOL;
         }
         $this->reccess--;
         $res .= \str_repeat(' ', ($this->reccess * 4)) . '}' . PHP_EOL;
@@ -106,33 +112,39 @@ class VarDumper
     {
         switch (true) {
             case \is_string($value):
-                $res = 'string(' . \mb_strlen($value) . ') "' . $value . '"';
+                $res = '<span style="' . $this->theme['type'] . '">string</span>'
+                        . '(<span style="' . $this->theme['length'] . '">' 
+                        . (\function_exists('mb_strlen') ? \mb_strlen($value) : \strlen($value))
+                        . '</span>) "' . $value . '"';
                 break;
             case \is_int($value):
-                $res = 'int (' . $value . ')';
+                $res = '<span style="' . $this->theme['type'] . '">int</span>'
+                    . ' (' . $value . ')';
                 break;
             case \is_resource($value):
-                $res = 'resource';
+                $res = '<span style="' . $this->theme['type'] . '">resource</span>';
                 break;
             case \is_object($value):
-                $res = 'object (' . \get_class($value) . '::class) ' . $this->objectVarDumper($value);
+                $res = '<span style="' . $this->theme['type'] . '">object</span>';
+                $res .= ' (<span style="'.$this->theme['class_name'].'">' . \get_class($value) . '::class</span>) ' . $this->objectVarDumper($value);
                 break;
             case \is_null($value):
-                $res = 'NULL';
+                $res = '<span style="' . $this->theme['null'] . '">NULL</span>';
                 break;
             case \is_bool($value):
-                $res = 'boolean (' 
-                        . ($value === FALSE ? 'false' : 'true')
-                        . ')';
+                $res = '<span style="' . $this->theme['type'] . '">boolean</span> (' 
+                        . '<span style="' . $this->theme['bool'] . '">'
+                        . ($value === FALSE ? 'FALSE' : 'TRUE')
+                        . '</span>)';
                 break;
             case \is_float($value):
-                $res = 'float (' . $value . ')';
+                $res = '<span style="' . $this->theme['type'] . '">float</span> (' . $value . ')';
                 break;
             case \is_array($value):
-                $res = 'array ' . $this->iterableVarDumper($value);
+                $res = '<span style="' . $this->theme['type'] . '">array</span> ' . $this->iterableVarDumper($value);
                 break;
             default:
-                $res = 'unknown';
+                $res = '<span style="' . $this->theme['type'] . '">unknown</span>';
         }
         return $res;
     }
