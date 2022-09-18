@@ -3,7 +3,7 @@
 ## Installation
 
 ```
-composer require initphp/vardumper
+composer require initphp/var-dumper
 ```
 
 or included `src/Init.php`.
