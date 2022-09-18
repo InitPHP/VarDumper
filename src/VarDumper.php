@@ -3,7 +3,7 @@
  * VarDumper.php
  * 
  * @author     Muhammet ŞAFAK <info@muhammetsafak.com.tr>
- * @copyright  VarDumper.php © 2022-09-16T11:40:45.910Z
+ * @copyright  VarDumper.php © 2022-09-17T11:40:45.910Z
  * @version    0.1
  * @link       https://www.muhammetsafak.com.tr
  * @license    MIT
@@ -12,6 +12,11 @@
 declare(strict_types=1);
 
 namespace InitPHP\VarDumper;
+
+use ReflectionClass;
+use ReflectionMethod;
+use ReflectionProperty;
+use ReflectionUnionType;
 
 use const PHP_EOL;
 
@@ -28,13 +33,33 @@ class VarDumper
     private $dump;
 
     protected $theme = [
-        'pre'           => 'color: #F1F1F1; background: #222; border: 1px solid #111; padding: 5px; margin: 8px;',
+        'pre'           => 'color: #F1F1F1; background: #222; border: 1px solid #111; padding: 8px; margin: 8px; border-radius: 2px; overflow: auto;',
         'type'          => 'color: #FF4A4A;',
         'length'        => 'color: #A6E3E9;',
         'class_name'    => 'color: #A460ED;',
         'null'          => 'color: #E3FDFD;',
         'bool'          => 'color: #DAF7A6;',
     ];
+
+    protected $customCss = '
+    pre.vardumper::-webkit-scrollbar {
+        width: 10px;
+        height: 10px;
+    }
+    
+    pre.vardumper::-webkit-scrollbar-track {
+      background: #FD841F; 
+    }
+     
+    pre.vardumper::-webkit-scrollbar-thumb {
+      background: #E14D2A; 
+    }
+    
+    pre.vardumper::-webkit-scrollbar-thumb:hover {
+      background: #9C2C77; 
+    }';
+
+    protected static $isCustomCSSImport = false;
 
     protected const ARRAY = 0;
     protected const METHOD = 1;
@@ -48,7 +73,12 @@ class VarDumper
 
     public function __toString()
     {
-        return '<pre style="' . $this->theme['pre'] . '">' . \str_replace(PHP_EOL . PHP_EOL, PHP_EOL, $this->dump) . '</pre>';
+        $res = '';
+        if(self::$isCustomCSSImport === FALSE){
+            self::$isCustomCSSImport = true;
+            $res .= '<style>' . $this->customCss . '</style>';
+        }
+        return $res . '<pre class="vardumper" style="' . $this->theme['pre'] . '">' . \str_replace(PHP_EOL . PHP_EOL, PHP_EOL, $this->dump) . '</pre>';
     }
 
     public static function newInstance($value)
@@ -74,7 +104,7 @@ class VarDumper
                 if($type === self::PROPERTIES){
                     $res .= '["' . $key . '"] => ' . $this->typeDumper($value) . PHP_EOL;
                 }elseif($type === self::METHOD){
-                    $res .= $value . '()' . PHP_EOL;
+                    $res .= $value . PHP_EOL;
                 }else{
                     $res .= '[' . (\is_string($key) ? '"' . $key . '"' : $key) . '] => '
                     . $this->typeDumper($value) . PHP_EOL;
@@ -92,13 +122,16 @@ class VarDumper
     {
         $res = '{';
         $this->reccess++;
-        $properties = \get_object_vars($object);
+
+        $dump = $this->reflectionObjectAndMethodPropertiesDump($object);
+
+        $properties = $dump['properties'];
         if(!empty($properties)){
             $res .= PHP_EOL . \str_repeat(' ', (4 * $this->reccess)) 
                     . '[<b>PROPERTIES</b>] ' . $this->iterableVarDumper($properties, self::PROPERTIES) . PHP_EOL;
         }
 
-        $methods = \get_class_methods($object);
+        $methods = $dump['methods'];
         if(!empty($methods)){
             $res .= PHP_EOL . \str_repeat(' ', (4 * $this->reccess)) 
                     . '[<b>METHODS</b>] ' . $this->iterableVarDumper($methods, self::METHOD) . PHP_EOL;
@@ -147,6 +180,89 @@ class VarDumper
                 $res = '<span style="' . $this->theme['type'] . '">unknown</span>';
         }
         return $res;
+    }
+
+    private function reflectionObjectAndMethodPropertiesDump($object): array
+    {
+        $res = [
+            'methods'       => [],
+            'properties'    => \get_object_vars($object),
+        ];
+        $reflection = new ReflectionClass($object);
+        $methods = $reflection->getMethods();
+        foreach ($methods as $method) {
+            $res['methods'][$method->getName()] = $this->reflectionMethod2String($method);
+        }
+        return $res;
+    }
+
+    private function reflectionMethod2String(ReflectionMethod $method): string
+    {
+        if($method->isPublic()){
+            $syntax = 'public ';
+        }elseif($method->isProtected()){
+            $syntax = 'protected ';
+        }else{
+            $syntax = 'private ';
+        }
+        if($method->isFinal()){
+            $syntax .= 'final ';
+        }
+        if($method->isAbstract()){
+            $syntax .= 'abstract ';
+        }
+        if($method->isStatic()){
+            $syntax .= 'static ';
+        }
+        $syntax .= 'function ' . $method->getName() . '(';
+        
+        $parameters = $method->getParameters();
+        $method_parameters = [];
+        foreach ($parameters as $parameter) {
+            $param = '';
+            if($parameter->hasType()){
+                $param .= $this->reflectionType2String($parameter->getType()) . ' ';
+            }
+            if($parameter->isVariadic()){
+                $param .= '...';
+            }
+            $param .= '$' . $parameter->getName();
+            if($parameter->isOptional() && !$parameter->isVariadic()){
+                $param .= ' = ' . $this->typeDumper($parameter->getDefaultValue());
+            }
+            $method_parameters[] = $param;
+        }
+        $syntax .= \implode(', ', $method_parameters);
+        $syntax .= ')';
+        if($method->hasReturnType()){
+            $syntax .= ': ' . $this->reflectionType2String($method->getReturnType());
+        }
+        return $syntax . ';';
+    }
+
+    /**
+     * Undocumented function
+     *
+     * @param ReflectionNamedType|ReflectionUnionType|null $types
+     * @return string
+     */
+    private function reflectionType2String($types): string
+    {
+        if($types === null){
+            return '';
+        }
+        $syntax = '<span style="' . $this->theme['type'] . '">';
+        if($types instanceof ReflectionUnionType){
+            $res_types = [];
+            foreach($types->getTypes() as $type){
+                $res_types[] = $type->getName();
+            }
+            $syntax .= \implode('|', $res_types);
+        }else{
+            $syntax .= $types->getName();
+        }
+        $syntax .= '</span>';
+        return $syntax;
     }
 
 }
