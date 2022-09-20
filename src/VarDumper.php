@@ -15,10 +15,10 @@ namespace InitPHP\VarDumper;
 
 use ReflectionClass;
 use ReflectionMethod;
-use ReflectionProperty;
-use ReflectionUnionType;
+use ReflectionNamedType;
 
 use const PHP_EOL;
+use const PHP_VERSION_ID;
 
 class VarDumper
 {
@@ -78,7 +78,15 @@ class VarDumper
             self::$isCustomCSSImport = true;
             $res .= '<style>' . $this->customCss . '</style>';
         }
-        return $res . '<pre class="vardumper" style="' . $this->theme['pre'] . '">' . \str_replace(PHP_EOL . PHP_EOL, PHP_EOL, $this->dump) . '</pre>';
+        $res .= '<pre class="vardumper" style="' . $this->theme['pre'] . '">' . \str_replace(PHP_EOL . PHP_EOL, PHP_EOL, $this->dump) . '</pre>';
+
+        if(\defined('PHP_SAPI') && \PHP_SAPI === 'cli'){
+            $res = \preg_replace_callback('/<style>(.*)<\/style>/ius', function ($value) {
+                return '';
+            }, $res);
+            $res = PHP_EOL . \strip_tags($res) . PHP_EOL;
+        }
+        return $res;
     }
 
     public static function newInstance($value)
@@ -137,7 +145,10 @@ class VarDumper
                     . '[<b>METHODS</b>] ' . $this->iterableVarDumper($methods, self::METHOD) . PHP_EOL;
         }
         $this->reccess--;
-        $res .= \str_repeat(' ', ($this->reccess * 4)) . '}' . PHP_EOL;
+        if(!empty($methods) || !empty($properties)){
+            $res .= \str_repeat(' ', ($this->reccess * 4));
+        }
+        $res .= '}' . PHP_EOL;
         return $res;
     }
 
@@ -156,6 +167,7 @@ class VarDumper
                 break;
             case \is_resource($value):
                 $res = '<span style="' . $this->theme['type'] . '">resource</span>';
+                $res .= ' (type="<span style="' . $this->theme['type'] . '">' . \get_resource_type($value) . '</span>")';
                 break;
             case \is_object($value):
                 $res = '<span style="' . $this->theme['type'] . '">object</span>';
@@ -243,7 +255,7 @@ class VarDumper
     /**
      * Undocumented function
      *
-     * @param ReflectionNamedType|ReflectionUnionType|null $types
+     * @param ReflectionNamedType|\ReflectionUnionType|null $types
      * @return string
      */
     private function reflectionType2String($types): string
@@ -252,16 +264,21 @@ class VarDumper
             return '';
         }
         $syntax = '<span style="' . $this->theme['type'] . '">';
-        if($types instanceof ReflectionUnionType){
-            $res_types = [];
-            foreach($types->getTypes() as $type){
-                $res_types[] = $type->getName();
+        if(PHP_VERSION_ID > 80000){
+            if($types instanceof \ReflectionUnionType){
+                $res_types = [];
+                foreach($types->getTypes() as $type){
+                    $res_types[] = $type->getName();
+                }
+                $syntax .= \implode('|', $res_types);
+            }else{
+                $syntax .= $types->getName();
             }
-            $syntax .= \implode('|', $res_types);
         }else{
             $syntax .= $types->getName();
         }
         $syntax .= '</span>';
+
         return $syntax;
     }
 
